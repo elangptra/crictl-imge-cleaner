@@ -1,0 +1,42 @@
+# =============================================================================
+# Crictl Image Cleanup - Configuration
+# Menghapus image containerd yang TIDAK dipakai container manapun
+# (running maupun exited) DAN sudah lebih tua dari retention_days.
+# =============================================================================
+
+cleanup:
+  retention_days: 15
+  # WAJIB true saat pertama kali dijalankan di node baru - cuma log,
+  # tidak menghapus apa pun. Ubah ke false setelah Anda review hasil
+  # dry-run dan yakin daftar kandidatnya benar.
+  dry_run: true
+
+crictl:
+  path: /usr/bin/crictl
+  command_timeout_seconds: 60
+
+containerd:
+  # Lokasi content store containerd - dipakai untuk membaca mtime blob
+  # sebagai proxy "kapan image terakhir di-pull ke node ini", karena
+  # CRI tidak menyimpan timestamp pull secara langsung.
+  content_dir: /var/lib/containerd/io.containerd.content.v1.content/blobs/sha256
+
+protected:
+  # Pattern (substring, case-insensitive) pada image ref yang TIDAK BOLEH
+  # dihapus apa pun kondisinya, sebagai safety net tambahan di luar deteksi
+  # otomatis "sedang dipakai container". Berguna untuk image yang di-pull
+  # tapi belum/tidak selalu ada container-nya (misal image untuk job/cronjob
+  # yang jarang jalan).
+  patterns:
+    - "registry.k8s.io/pause"
+
+prometheus:
+  textfile_directory: /var/lib/node_exporter/textfile_collector
+  metric_filename: image_cleanup.prom
+
+lock:
+  file: /run/image-cleanup.lock
+
+logging:
+  file: /var/log/image-cleanup/image-cleanup.log
+  level: INFO
