@@ -7,6 +7,6 @@ After=network-online.target containerd.service
 Type=oneshot
 User=root
 Group=root
-ExecStart=/usr/bin/python3 /opt/crictl-image-cleanup/scripts/image_cleanup.py /etc/image-cleanup/config.yaml
+ExecStart=/usr/bin/python3 /opt/crictl-image-cleanup/scripts/image-cleanup.py /etc/image-cleanup/config.yaml
 NoNewPrivileges=true
 PrivateTmp=true
