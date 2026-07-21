@@ -237,20 +237,42 @@ def is_protected(image, patterns):
     return False
 
 
-def remove_image(image, cfg, logger):
+def remove_image(image, cfg, logger, max_retries=2, retry_delay_seconds=5):
+    """crictl rmi kadang gagal dengan DeadlineExceeded/RST_STREAM saat node
+    sedang sibuk atau image berlayer banyak - biasanya transient, jadi
+    dicoba beberapa kali sebelum benar-benar dianggap gagal."""
     ref = (image.get("repoTags") or image.get("repoDigests") or [image["id"]])[0]
-    result = run_crictl(["rmi", image["id"]], cfg)
-    if result.returncode != 0:
-        logger.error(
-            f"Failed to remove image {ref}: {result.stderr.strip()}",
-            extra={"action": "remove_image", "status": "failed", "image": ref},
-        )
-        return False
-    logger.info(
-        f"Removed image: {ref}",
-        extra={"action": "remove_image", "status": "ok", "image": ref, "size_bytes": image.get("size", 0)},
+
+    attempt = 0
+    last_stderr = ""
+    while attempt <= max_retries:
+        attempt += 1
+        result = run_crictl(["rmi", image["id"]], cfg)
+        if result.returncode == 0:
+            logger.info(
+                f"Removed image: {ref}",
+                extra={"action": "remove_image", "status": "ok", "image": ref, "size_bytes": image.get("size", 0)},
+            )
+            return True
+
+        last_stderr = result.stderr.strip()
+        is_transient = "deadlineexceeded" in last_stderr.lower() or "rst_stream" in last_stderr.lower()
+
+        if is_transient and attempt <= max_retries:
+            logger.warning(
+                f"Transient failure removing {ref} (attempt {attempt}/{max_retries + 1}), retrying: {last_stderr}",
+                extra={"action": "remove_image", "status": "retry", "image": ref},
+            )
+            time.sleep(retry_delay_seconds)
+            continue
+
+        break
+
+    logger.error(
+        f"Failed to remove image {ref}: {last_stderr}",
+        extra={"action": "remove_image", "status": "failed", "image": ref},
     )
-    return True
+    return False
 
 
 # -----------------------------------------------------------------------
